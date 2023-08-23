@@ -1,47 +1,60 @@
-import ForgeUI, { User,  DashboardGadget, useState, useEffect, Text , useProductContext,Select, Option }  from "@forge/ui";
+import ForgeUI, { User,  DashboardGadget, Text , useProductContext,Select, Option ,useState, useEffect,UserPicker,DashboardGadgetEdit, Button , render,TextField}  from "@forge/ui";
 import api, { route } from "@forge/api";
-const View = () => {
- 
 
-  const [logwork, setLogwork] = useState("Fetching logwork...");
-  let [start,setStartDate] = useState('');
-  let [End,setEndDate] = useState('');
-  let [loggedWork,setLoggedWork] = useState(false)
-  let UserWorkLogs = {};
-  let [worklogs,setworklogs] = useState(false);
-  let [projects, setProject] = useState("");
-  let [accountIds, setaccountIds] = useState("");
-  const [selectedRoleUserAccountIds, setSelectedRoleUserAccountIds] = useState([]);
+const Bar = ()=>{
+  return(
+    <div></div>
+  )
+}
+const View = () => {
   const { extensionContext: { gadgetConfiguration } } = useProductContext();
   const someRandomvalue = useProductContext();
+    console.log("This is someRandomvalue",someRandomvalue);
+      console.log("This is someRandomvalue exit");
+  const [logwork, setLogwork] = useState("Fetching logwork...");
+  const [start,setStartDate] = useState('');
+  const [End,setEndDate] = useState('');
+  const [loggedWork,setLoggedWork] = useState(false)
+  const UserWorkLogs = {};
+  const [worklogs,setworklogs] = useState(false);
+  const [projects, setProject] = useState("");
+  const [accountIds, setaccountIds] = useState([]);
+  const { roles,StartDate, EndDate,project,selectedRoleUserAccountIds} = gadgetConfiguration;
+  //const doSomething= ()=>{}
+  useState(fetchRoles());
+  console.log("This is roles",roles);
+  console.log("This is project",project);
+  //console.log(roles,StartDate,EndDate,project,accountIds,"This is from useEffect THigns");
+  //useState(fetchRoles());
   
-  const { roles,StartDate, EndDate,project } = gadgetConfiguration;
-console.log("This is roles",roles);
-console.log("This is project",project);
+  useState(somethingElse(accountIds,StartDate,EndDate));
 
-  console.log("This is after someRandomvalue",someRandomvalue);
- async function timer(time){
+  async function timer(time){
     return new Promise((resolve,reject)=>{
       setTimeout(()=>{resolve()},time)
     })
   }
-  // console.log(value);
-  // useState(fetchNumberOfIssues(User,StartDate,EndDate));
-  useState(fetchRoles());
-  useState(somethingElse(accountIds,StartDate,EndDate));
-  
-  
-  
+
   async function fetchRoles() {
-      const roleUsersResponse = await api.asUser().requestJira(route`/rest/api/3/role/${roles}`);
+      console.log("fetchrole view");
+      const roleUsersResponse = await api.asUser().requestJira(route`/rest/api/3/role/${roles}`,{
+        headers:{
+          'content-type':'application/json'
+        }
+      });
+      //const roleUsersResponse = await api.asUser().requestJira(route`/rest/api/3/role/${roles}`);
       const roleUsersJson = await roleUsersResponse.json();
       const accountIds = roleUsersJson.actors.map((actor) => actor.actorUser.accountId);
-      setSelectedRoleUserAccountIds(accountIds);
-      console.log("accountIds",accountIds);
+      setaccountIds(accountIds);
+      console.log("accountIds from view",accountIds);
+        //console.log(roles,StartDate,EndDate,project,accountIds,"This is from useEffect THigns");
     }
+    
+            console.log(roles,StartDate,EndDate,project,accountIds,"This is from useEffect THigns");
+
   async function fetchNumberOfIssues(accountIds, startDate , EndDate,project) {
     
-    // console.log(User , "This is from fetchNumberOfIssues");
+     console.log(accountIds , "This is from fetchNumberOfIssues");
     // console.log(startDate,EndDate);
     setStartDate(startDate);
     setEndDate(EndDate);
@@ -77,7 +90,7 @@ console.log("This is project",project);
 }
   async function fetchIssues(accountIds,start,end,project){
     
-    console.log(accountIds);
+    console.log("from fetchIssues",accountIds);
     console.log(start,end);
     let issues = []
     let loop = true;
@@ -204,6 +217,7 @@ console.log("This is project",project);
   
   return (
     <DashboardGadget>
+    
    {loggedWork && details()}
 
     </DashboardGadget>
