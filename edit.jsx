@@ -1,16 +1,50 @@
-import ForgeUI, { DashboardGadgetEdit, UserPicker, useState, useEffect, TextField, DatePicker, Select, Option } from "@forge/ui";
+//this function call for both all and single role also
+import ForgeUI, { DashboardGadgetEdit, UserPicker, useState, useEffect, TextField, DatePicker, Select, Option,Button,render,Text,User,DashboardGadget,useProductContext } from "@forge/ui";
 import api, { route } from "@forge/api";
 
 const Edit = () => {
-  const [startDate, setStartDate] = useState("");
+  // let [someCount,setSomeCount] = useState(0)
+
+   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [project, setProject] = useState("");
   const [projects, setProjects] = useState([]);
   const [roles, setRoles] = useState([]); 
   const [selectedRoleUserAccountIds, setSelectedRoleUserAccountIds] = useState([]);
-  
+  const [accountIds, setaccountIds] = useState([]);
     useState(fetchProjects());
     useState(fetchRoles());
+  let [userCount, setUserCount] = useState(1);
+  const onSubmit = values => {
+        console.log("values in edit",values);
+    return values;
+
+  };
+
+  const handleAddButtonClick = () => {
+    let value = userCount;
+    setUserCount(value+1);
+    // console.log(userCount)
+    // setSomeCount(count => count +1);
+  };
+
+  const renderUserFields = () => {
+    const userFields = [];
+    let users = {}
+    for (let i = 0; i < userCount; i++) {
+      // users[<UserPicker lable="user" name={`user${i}`} text="Picker User" />] =   <TextField key={i} name={`name${i}`} label={`Say hello to user ${i + 1}:`} />
+      userFields.push(
+        
+        <UserPicker lable="user" name={`user${i}`} text="Picker User" /> 
+         
+        // <TextField key={i} name={`name${i}`} label={`Say hello to user ${i + 1}:`} />
+
+      );
+    }
+
+
+    return userFields;
+  };
 
   async function fetchProjects() {
     try {
@@ -47,53 +81,13 @@ const Edit = () => {
       const responseJson = await response.json();
       setRoles(responseJson);
       console.log("exit fetchrole")
-      if (responseJson.length > 0) {
-      const roleId = responseJson[0].id; // Get the ID of the default selected role
-      const roleUsersResponse = await api.asUser().requestJira(route`/rest/api/3/role/${roleId}`);
-      const roleUsersJson = await roleUsersResponse.json();
-      const accountIds = roleUsersJson.actors.map((actor) => actor.actorUser.accountId);
-      setSelectedRoleUserAccountIds(accountIds);
-      console.log("accountIds",accountIds);
-    }
     } catch (error) {
       console.error("Error fetching roles:", error);
     }
   }
-  
-  
-  const onSubmit = async (values) => {
-  console.log("onsumit call");
-    try {
-      return values;
-      console.log("values",values);
-      api.store.onGadgetConfigurationChange((configuration) => {
-        configuration.StartDate = startDate;
-        configuration.EndDate = endDate;
-        configuration.Project = project;
-        configuration.Projects = projects;
-        configuration.Roles = roles;
-        configuration.SelectedRoleUserAccountIds = selectedRoleUserAccountIds; // Add this line
-        console.log("Selected Project role:", roles); 
-        console.log("Selected Project Key:", projects); 
-        configuration.SelectedUsers = selectedRoleUserAccountIds;
-        console.log("Selected users", SelectedUsers); 
-        console.log("Selected Users in onSubmit:", configuration);
-        return configuration;
-      });
 
-      return "Data saved successfully"; // Return a valid child element or a string
-    } catch (error) {
-      console.error("Error on form submission:", error);
-      return "Error occurred while saving data"; // Return a valid child element or a string
-    }
-  };
-
-        console.log("Selected Users in onSubmit:", configuration);
-                console.log("Selected Users in onSubmit:", values);
   return (
     <DashboardGadgetEdit onSubmit={onSubmit}>
-      <DatePicker name="StartDate" label="Start Date" value={startDate} onChange={(newValue) => setStartDate(newValue)} />
-      <DatePicker name="EndDate" label="End Date" value={endDate} onChange={(newValue) => setEndDate(newValue)} />
       <Select
           label="Select Project"
           name="project" // Add the name prop
@@ -108,18 +102,19 @@ const Edit = () => {
       <Select
         label="Select Role"
         name="roles"
-        isMulti={true} // Allow selecting multiple roles
         value={roles}
         onChange={(newRoles) => setRoles(newRoles)}
       >
+	<Option label='All' value='all' />
         {roles.map((role) => (
           <Option key={role.id} label={role.name} value={role.id} />
         ))}
       </Select>
+      <DatePicker name="StartDate" label="Start Date" value={startDate} onChange={(newValue) => setStartDate(newValue)} />
+      <DatePicker name="EndDate" label="End Date" value={endDate} onChange={(newValue) => setEndDate(newValue)} />
     </DashboardGadgetEdit>
   );
 };
 
+
 export default Edit;
-
-
