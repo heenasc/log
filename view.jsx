@@ -1,4 +1,5 @@
-import ForgeUI, { User,  DashboardGadget, Text , useProductContext,Select, Option ,useState, useEffect,UserPicker,DashboardGadgetEdit, Button , render,TextField}  from "@forge/ui";
+//this below code working fine for All users but if i am selecting single role it throws error function not calling
+import ForgeUI, {User,  DashboardGadget, Text , useProductContext,Select, Option ,useState, useEffect,UserPicker,DashboardGadgetEdit, Button , render,TextField,Macro, Table, Head, Cell, Row}  from "@forge/ui";
 import api, { route } from "@forge/api";
 
 const Bar = ()=>{
@@ -9,7 +10,7 @@ const Bar = ()=>{
 const View = () => {
   const { extensionContext: { gadgetConfiguration } } = useProductContext();
   const someRandomvalue = useProductContext();
-    console.log("This is someRandomvalue",someRandomvalue);
+    //console.log("This is someRandomvalue",someRandomvalue);
       console.log("This is someRandomvalue exit");
   const [logwork, setLogwork] = useState("Fetching logwork...");
   const [start,setStartDate] = useState('');
@@ -19,38 +20,113 @@ const View = () => {
   const [worklogs,setworklogs] = useState(false);
   const [projects, setProject] = useState("");
   const [accountIds, setaccountIds] = useState([]);
+  const [lastRoleId, setlastRoleId] = useState([]);
   const { roles,StartDate, EndDate,project,selectedRoleUserAccountIds} = gadgetConfiguration;
-  //const doSomething= ()=>{}
-  useState(fetchRoles());
+  console.log("This is roles",roles);
+  
   console.log("This is roles",roles);
   console.log("This is project",project);
   //console.log(roles,StartDate,EndDate,project,accountIds,"This is from useEffect THigns");
   //useState(fetchRoles());
-  
-  useState(somethingElse(accountIds,StartDate,EndDate));
-
+ /* useEffect(() => {
+    fetchRoles(); // Fetch roles when the component mounts
+  }, []);*/
   async function timer(time){
     return new Promise((resolve,reject)=>{
       setTimeout(()=>{resolve()},time)
     })
   }
 
-  async function fetchRoles() {
-      console.log("fetchrole view");
-      const roleUsersResponse = await api.asUser().requestJira(route`/rest/api/3/role/${roles}`,{
-        headers:{
-          'content-type':'application/json'
+  if(roles=='all'){
+  //const doSomething= ()=>{}
+  console.log("all calling");
+  useState(fetchAllRoles(project));
+    console.log("all exit");
+  }else{
+  console.log("all not calling");
+  useState(fetchRoles());
+    console.log("all not exit");
+  }
+
+
+
+async function fetchAllRoles(projectKey) {
+  console.log("projectKey", projectKey);
+  console.log("fetchrole view All");
+  const projectRoleResponse = await api.asUser().requestJira(route`/rest/api/3/project/${projectKey}/role`, {
+    headers: {
+      'content-type': 'application/json'
+    }
+  });
+  const projectRoleJson = await projectRoleResponse.json();
+
+  // Create an array to store all accountIds
+  const allAccountIds = [];
+
+  for (const roleUrl of Object.values(projectRoleJson)) {
+    console.log("roleUrl", roleUrl);
+    // Extract the roleId from the roleUrl
+    const lastRoleId = roleUrl.split('/').pop();
+    setlastRoleId(lastRoleId);
+    console.log("lastRoleId", lastRoleId);
+
+    try {
+      const roleUsersResponse = await api.asUser().requestJira(route`/rest/api/3/role/${lastRoleId}`, {
+        headers: {
+          'content-type': 'application/json'
         }
       });
-      //const roleUsersResponse = await api.asUser().requestJira(route`/rest/api/3/role/${roles}`);
+
       const roleUsersJson = await roleUsersResponse.json();
-      const accountIds = roleUsersJson.actors.map((actor) => actor.actorUser.accountId);
-      setaccountIds(accountIds);
-      console.log("accountIds from view",accountIds);
-        //console.log(roles,StartDate,EndDate,project,accountIds,"This is from useEffect THigns");
+
+      // Check if the 'actors' property exists and is an array before mapping it
+      if (roleUsersJson.actors && Array.isArray(roleUsersJson.actors)) {
+        const accountIds = roleUsersJson.actors
+          .filter((actor) => actor.actorUser && actor.actorUser.accountId) // Check if actorUser exists and has an accountId
+          .map((actor) => actor.actorUser.accountId);
+
+        // Concatenate the current accountIds to the allAccountIds array
+        allAccountIds.push(...accountIds);
+
+        //console.log("accountIds from view", accountIds);
+      } else {
+        // Display a message when no actors are present in the role
+        console.log(`No actors found for role with lastRoleId ${lastRoleId}`);
+      }
+    } catch (error) {
+      // Handle the error gracefully
+      console.error(`Error fetching role with lastRoleId ${lastRoleId}: ${error.message}`);
     }
-    
-            console.log(roles,StartDate,EndDate,project,accountIds,"This is from useEffect THigns");
+  }
+
+  // Now fetch issues for all accountIds concurrently
+  const issuePromises = allAccountIds.map(async (accountId) => {
+    try {
+      const workLog = await fetchIssues(accountId, StartDate, EndDate, project);
+      return { accountId, workLog };
+    } catch (error) {
+      console.error(`Error fetching issues for accountId ${accountId}: ${error.message}`);
+      return { accountId, workLog: null };
+    }
+  });
+
+  // Wait for all issue fetching to complete
+  const results = await Promise.all(issuePromises);
+
+  // Process the results and update UserWorkLogs
+  for (const result of results) {
+    const { accountId, workLog } = result;
+    //console.log("accountIds from view", accountId);
+    UserWorkLogs[accountId] = workLog !== null ? workLog : 1;
+  }
+
+  console.log(UserWorkLogs, "This is worklogs userWorklogs");
+  console.log(loggedWork, "This is loggedWork");
+  setLoggedWork(true);
+  setworklogs(UserWorkLogs);
+}
+
+
 
   async function fetchNumberOfIssues(accountIds, startDate , EndDate,project) {
     
@@ -90,7 +166,7 @@ const View = () => {
 }
   async function fetchIssues(accountIds,start,end,project){
     
-    console.log("from fetchIssues",accountIds);
+    //console.log("from fetchIssues",accountIds);
     console.log(start,end);
     let issues = []
     let loop = true;
@@ -164,7 +240,7 @@ const View = () => {
     for(let i in worklogs){
       const worklogStarted = new Date(worklogs[i].created);
     const worklogUpdated = new Date(worklogs[i].updated);
-      if(worklogs[i].author.accountId == user && ((worklogStarted >= start && worklogStarted <= end) || (worklogUpdated >= start && worklogUpdated <= end))){
+      if(worklogs[i].author.accountId == accountIds && ((worklogStarted >= start && worklogStarted <= end) || (worklogUpdated >= start && worklogUpdated <= end))){
         totalTime+= worklogs[i].timeSpentSeconds;
       }
     }
@@ -198,28 +274,50 @@ const View = () => {
  
   let randomValues = [1,2,3,4]
 
-  function details(){
+  function details() {
+  console.log("Inside details");
+  console.log(UserWorkLogs, "Inside userWorklogs details");
+  let rows = [];
 
-    console.log("Inside details");
-    console.log(UserWorkLogs,"Inside userWOrklogs deatils ");
-    let detailsArray = [];
-    let count = 0;
-    for(let i in worklogs){
-      
-        detailsArray.push(<Text>{i}</Text>)
-        detailsArray.push(<Text>{worklogs[i]}</Text>)
-      
-    }
-    console.log(detailsArray);
-    console.log(worklogs,"This is workLogs in details of worklogs");
-    return detailsArray;
+  for (let accountId in worklogs) {
+    const logWork = worklogs[accountId];
+    rows.push(
+      <Row key={accountId}>
+        <Cell>
+          <User accountId={accountId} />
+        </Cell>
+        <Cell>
+          <Text>{logWork}</Text>
+        </Cell>
+      </Row>
+    );
   }
+
+  console.log(rows);
+  console.log(UserWorkLogs, "This is workLogs in details of worklogs");
+
+  return (
+    <Table>
+      <Head>
+        <Cell>
+          <Text>User</Text>
+        </Cell>
+        <Cell>
+          <Text>Log Work</Text>
+        </Cell>
+      </Head>
+      {rows}
+    </Table>
+  );
+}
+
   
+  //   {loggedWork && details()}
   return (
     <DashboardGadget>
-    
+   
    {loggedWork && details()}
-
+ 
     </DashboardGadget>
   );
 };
