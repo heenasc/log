@@ -1,0 +1,34 @@
+modules:
+  jira:dashboardGadget:
+    - key: logreport-app-hello-world-gadget
+      title: LOGREPORT-APP
+      description: A hello world dashboard gadget.
+      thumbnail: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+      resource: main
+      resolver:
+        function: resolver
+      edit:
+        resource: main
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: static/hello-world/build
+permissions:
+  external:
+    images:
+      - '*.wp.com'  
+  scopes:
+    - 'manage:jira-configuration'
+    - 'read:jira-work'    
+    - 'read:jira-user'               
+    - 'read:application-role:jira'   
+    - 'read:group:jira'              
+    - 'read:user:jira'               
+    - 'read:avatar:jira'   
+  content:
+    styles:
+      - unsafe-inline
+app:
+  id: ari:cloud:ecosystem::app/3c224a1a-963f-4ea3-8d47-cfdf4a111677
