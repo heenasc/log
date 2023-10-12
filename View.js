@@ -1,6 +1,7 @@
-//below code gives me progress bar and Avatar
+//update jql
 import React, { useEffect, useState } from 'react';
-import { view, invoke, requestJira } from '@forge/bridge';
+import { view, invoke, requestJira, router } from '@forge/bridge';
+import api from "@forge/api";
 
 function View() {
   const [context, setContext] = useState();
@@ -16,11 +17,16 @@ function View() {
   const [lastRoleId, setlastRoleId] = useState([]);
   const [userDetails, setUserDetails] = useState({}); // Define userDetails state
   const [maxHours, setMaxHours] = useState(40);
+  //const query = 'project=CAI';
+  let jqlQuery;
+  let finalUrl;
+  let [Query, setQuery]=useState('');
   //fetch for all
   const fetchAllRoles = async (projectKey,StartD,EndD) => {
   console.log("projectKey", projectKey);
   console.log("fetchrole view All");
   console.log("StartD,EndD",StartD,EndD);
+  
   const projectRoleResponse = await requestJira(`/rest/api/3/project/${projectKey}/role`, {
     headers: {
       'content-type': 'application/json'
@@ -53,10 +59,11 @@ function View() {
         const accountIds = roleUsersJson.actors
           .filter((actor) => actor.actorUser && actor.actorUser.accountId) // Check if actorUser exists and has an accountId
           .map((actor) => actor.actorUser.accountId);
-
+         const activeAccountIds = await filterInactiveUsers(accountIds);
+         console.log("activeAccountIds",activeAccountIds);
         // Concatenate the current accountIds to the allAccountIds array
-        allAccountIds.push(...accountIds);
-
+        allAccountIds.push(...activeAccountIds);
+       
         //console.log("accountIds from view", accountIds);
       } else {
         // Display a message when no actors are present in the role
@@ -97,6 +104,35 @@ function View() {
 }  
     
     
+  // Function to filter inactive users
+const filterInactiveUsers = async (accountIds) => {
+  const activeAccountIds = [];
+
+  for (const accountId of accountIds) {
+    try {
+      const userResponse = await requestJira(`/rest/api/3/user?accountId=${accountId}`, {
+        headers: {
+          'content-type': 'application/json'
+        }
+      });
+
+      const userJson = await userResponse.json();
+      
+      // Check if the user is active based on the "active" field
+      if (userJson.active === true) {
+        activeAccountIds.push(accountId);
+      }
+      console.log("activeAccountIds from function",activeAccountIds);
+    } catch (error) {
+      console.error(`Error fetching user details for accountId ${accountId}: ${error.message}`);
+    }
+  }
+
+  return activeAccountIds;
+}
+  
+    
+    
   //const [role, setRole] = useState([]);
   const fetchData = async (role,project,StartDate,EndDate) => {
     try {
@@ -104,6 +140,7 @@ function View() {
       setProjects(project);
       setStartDate(StartDate);
       setEndDate(EndDate);
+      //openJiraSearch(query);
       console.log("entered fetchProjects after set",project,StartDate,EndDate);
       const response = await requestJira(`/rest/api/3/project/${project}/role/${role}`, {
       //const response = await requestJira(`/rest/api/3/role/${role}`, {
@@ -116,30 +153,53 @@ function View() {
       const responseJson = await response.json();
       console.log("responseJson",responseJson);
       const accountIds = responseJson.actors.map((actor) => actor.actorUser.accountId);
-      setAccountIds(accountIds);
+      const activeAccountIds = await filterInactiveUsers(accountIds);
+      //setAccountIds(accountIds);
+      setAccountIds(activeAccountIds);
+      console.log("activeAccountIds from view", activeAccountIds);
+      
+      let Query1=await JQLFucntion(activeAccountIds,StartDate,EndDate, project);
+      setQuery(Query1);
       console.log("accountIds from view", accountIds);
-      for(let i in accountIds){
-      UserWorkLogs[accountIds[i]] = 1
+      for(let i in activeAccountIds){
+      UserWorkLogs[activeAccountIds[i]] = 1
     }
     
-      for(let i in accountIds){
-      console.log("accountIds fetchissues",accountIds);
-      let workLog = await fetchIssues(accountIds[i],StartDate,EndDate, project);
-      UserWorkLogs[accountIds[i]] = workLog;
+      for(let i in activeAccountIds){
+      console.log("accountIds fetchissues",activeAccountIds);      
+      let workLog = await fetchIssues(activeAccountIds[i],StartDate,EndDate, project);
+      UserWorkLogs[activeAccountIds[i]] = workLog;
     }
     console.log(UserWorkLogs),"This is worklogs userWorklogs";
     console.log(loggedWork,"This is loggedWork");
     setLoggedWork(true);
     setworklogs(UserWorkLogs);
-    fetchUserDetails(accountIds);
+    fetchUserDetails(activeAccountIds);
     } catch (error) {
       console.error("Error fetching projects:", error);
     }
-    console.log("accountIds from outside view", accountIds);
+    //console.log("activeAccountIds from outside view", activeAccountIds);
     }
     
+   async function JQLFucntion(activeAccountIds,StartDate,EndDate, project){
+   console.log("JQLFucntion called",JQLFucntion);
+   Query = `project = "${project}" AND worklogAuthor in (${activeAccountIds}) AND worklogDate >= "${StartDate}" AND worklogDate <= "${EndDate}"`;
+   console.log("inside JQLFucntion Query",Query);
+   return Query; // Return the Query value
 
-   async function fetchIssues(accountIds,start,end,project){
+   }
+   function openInNewTabWithQuery(query) {
+   console.log("query openInNewTabWithQuery",query);
+    const baseUrl = 'https://cambridgetech.atlassian.net/issues/?jql=';
+    const encodedQuery = encodeURIComponent(query); // Ensure the query is properly encoded
+    finalUrl = `${baseUrl}${encodedQuery}`;
+    console.log("finalUrl",finalUrl);
+    router.open(finalUrl);
+   }
+   
+  console.log("outside function Query",Query);
+  
+  async function fetchIssues(accountIds,start,end,project){
     
     console.log("from fetchIssues",accountIds);
     console.log(start,end);
@@ -148,8 +208,14 @@ function View() {
     let startAt = 0;
     let maxResults = 50;
 
-    const jqlQuery = `project = "${project}" AND worklogAuthor in (${accountIds}) AND updated >= "${start}" AND updated <= "${end}"`;
-    console.log(jqlQuery);
+    //const jqlQuery = `project = "${project}" AND worklogAuthor in (${accountIds}) AND updated >= "${start}" AND updated <= "${end}"`;
+    //const jqlQuery = `project = "${project}" AND worklogAuthor in (${accountIds}) AND worklogDate >= startOfMonth(-1) AND worklogDate < startOfMonth()`;
+    //const jqlQuery = `project = "${project}" AND worklogAuthor in (${accountIds}) AND worklogDate >= startOfWeek(-1) AND worklogDate <= startOfWeek()`;
+    jqlQuery = `project = "${project}" AND worklogAuthor in (${accountIds}) AND worklogDate >= "${start}" AND worklogDate <= "${end}"`;
+    console.log("jqlQuery",jqlQuery);
+    //jql='project = CAI';
+    //openJiraSearch(jqlQuery);
+    
     while(loop){
       const response = await requestJira(`/rest/api/3/search?jql=${jqlQuery}&fields=none&maxResults=${maxResults}&startAt=${startAt}`,{
         headers:{
@@ -159,7 +225,7 @@ function View() {
       let responseJson = await response.json();
       const issueArray = responseJson.issues.map(obj => obj.key);
       issues.push(...issueArray);
-      // console.log(responseJson);
+      console.log("responseJson",responseJson);
       // console.log(responseJson.issues.length);
       if(responseJson.issues.length < 50){
         loop = false;
@@ -170,6 +236,7 @@ function View() {
     //   let issueWorklogs = await workLogs(issues,start,end);
     // }
     let userWorkLogs = await workLogs(issues,start,end,accountIds)
+    console.log("issues",issues);
     //fetchUserDetails(accountIds);
     return userWorkLogs;
     
@@ -187,14 +254,17 @@ function View() {
       
       while(loop){
         let worklogResponse =  await requestJira(`/rest/api/3/issue/${userIssueIds[i]}/worklog?startAt=${startAt}&maxResults=${maxResults}`);
+         
         
+
         let worklog = await worklogResponse.json();
-        // console.log(worklog)
+         console.log("worklog",worklog);
         // console.log(worklog.worklogs[0].author)
         // console.log(worklog.worklogs.length);
         startAt +=50;
-        // console.log(worklogResponse.worklogs)
+         console.log("worklogResponse.worklogs",worklog.worklogs);
         for(let j in worklog.worklogs){
+          console.log("j",worklog.worklogs[j]);
           worklogs.push(worklog.worklogs[j])
         }
         
@@ -213,13 +283,21 @@ function View() {
      end = new Date(end);
     
     for(let i in worklogs){
-      const worklogStarted = new Date(worklogs[i].created);
+      console.log("worklogs",worklogs);
+      const worklogStarted = new Date(worklogs[i].started); 
+      //const worklogStarted = new Date(worklogs[i].created);
     const worklogUpdated = new Date(worklogs[i].updated);
-      if(worklogs[i].author.accountId == accountIds && ((worklogStarted >= start && worklogStarted <= end) || (worklogUpdated >= start && worklogUpdated <= end))){
+    console.log("worklogUpdated",worklogUpdated);
+      //if(worklogs[i].author.accountId == accountIds && ((worklogStarted >= start && worklogStarted <= end) || (worklogUpdated >= start && worklogUpdated <= end))){
+      if (worklogs[i].author.accountId == accountIds && worklogStarted >= start && worklogStarted <= end) {
+      //console.log('worklogStarted:',worklogStarted,'worklogUpdated',worklogUpdated,'start:',start,'end:',end);
+     
+        console.log("worklogs[i].timeSpent",worklogs[i].timeSpent);
         totalTime+= worklogs[i].timeSpentSeconds;
+        console.log("totalTime",totalTime);
       }
     }
-    // console.log(totalTime)
+    console.log("totalTime updated",totalTime);
     const hours = Math.floor(totalTime / 3600);
     const minutes = Math.floor((totalTime % 3600) / 60);
     const logworkData = `${hours}h ${minutes}m`;
@@ -255,6 +333,8 @@ function View() {
   
   for (let accountId in worklogs) {
   const logWork = worklogs[accountId];
+  calculateTotalLogWork(worklogs);
+  calculateTotalLogWork(worklogs);
   //fetchUserDetails(accountId)
   parseLogWork(logWork);
   const logWorkPercentage = parseLogWork(logWork);
@@ -399,7 +479,8 @@ async function getContext() {
         start.setDate(start.getDate() + 1); // Move to the next day
       }
       console.log("workingDays",workingDays);
-      newmaxHours = workingDays * 8 - 16;
+      //newmaxHours = workingDays * 8 - 16;
+      newmaxHours = workingDays * 8;
       setMaxHours(newmaxHours);
       console.log("maxHours",newmaxHours);
       
@@ -470,7 +551,8 @@ async function getContext() {
         start.setDate(start.getDate() + 1); // Move to the next day
       }
       console.log("workingDays",workingDays);
-      newmaxHours = workingDays * 8 - 16;
+      //newmaxHours = workingDays * 8 - 16;
+      newmaxHours = workingDays * 8;
       setMaxHours(newmaxHours);
       console.log("maxHours",newmaxHours);
       console.log("maxHours",maxHours);
@@ -523,57 +605,121 @@ async function getContext() {
   return logWorkPercentage;
 }
 
+/*function calculateTotalLogWork(worklogs) {
+  let totalLogWork = 0;
+
+  for (const accountId in worklogs) {
+    const logWork = worklogs[accountId];
+    totalLogWork += parseFloat(logWork);
+  }
+
+  return totalLogWork;
+}*/
+
+ if (!worklogs || !calculateTotalLogWork) {
+    return 'Please wait, your data is being loaded...';
+  }
+
+function calculateTotalLogWork(worklogs) {
+  let totalLogWorkSeconds = 0;
+
+  for (const accountId in worklogs) {
+    const logWork = worklogs[accountId];
+    const [hoursStr, minutesStr] = logWork.split(' ');
+    const hours = parseFloat(hoursStr.replace('h', '')) || 0;
+    const minutes = parseFloat(minutesStr.replace('m', '')) || 0;
+    totalLogWorkSeconds += hours * 3600 + minutes * 60;
+  }
+
+  const totalHours = Math.floor(totalLogWorkSeconds / 3600);
+  const totalMinutes = Math.floor((totalLogWorkSeconds % 3600) / 60);
+
+  return `${totalHours}h ${totalMinutes}m`;
+}
+
+
+function calculateTotalTimeSpent(worklogs) {
+  let totalTimeSpent = 0;
+
+  for (const accountId in worklogs) {
+    // Assuming maxHours is a number
+    totalTimeSpent += maxHours;
+  }
+
+  return totalTimeSpent;
+}
+
+  
+  function openInNewTab(url) {
+  router.open(url, '_blank');
+  //router.navigate(url);
+}
+
 
 return (
-    <div>
-      {loggedWork && (
-        <table>
-          <thead>
-            <tr>
-              <th>User</th>
-              <th>Log Work</th>
-              <th>Progress</th>
-              <th>Time Spent</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(worklogs).map(([accountId, logWork]) => {
-              const logWorkPercentage = parseLogWork(logWork);
-              const userDetail = userDetails[accountId] || {};
+  <div>
+    {loggedWork && (
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Original Estimate</th>
+            <th>Log Work</th>
+            <th>Progress</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(worklogs).map(([accountId, logWork]) => {
+            const logWorkPercentage = parseLogWork(logWork);
+            const userDetail = userDetails[accountId] || {};
 
-              return (
-                <tr key={accountId}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <img
-                        src={userDetail.avatarUrl}
-                        alt={`Avatar for ${userDetail.name}`}
-                        style={{ width: '24px', height: '24px', marginRight: '8px' }}
-                      />
-                      {userDetail.name || accountId}
-                    </div>
-                  </td>
-                  <td>{logWork}</td>
-                  <td>
-                    <div style={{ width: '100px', height: '20px', border: '1px solid #ccc' }}>
-                      <svg width="100%" height="100%">
-                        <g className="bars">
-                          <rect fill="#ff0000" width="100%" height="100%"></rect>
-                          <rect fill="#00ff00" width={`${logWorkPercentage}%`} height="100%"></rect>
-                        </g>
-                      </svg>
-                    </div>
-                  </td>
-                  <td>Σ Time Spent: {maxHours} hours</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
+            return (
+              <tr key={accountId}>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <img
+                      src={userDetail.avatarUrl}
+                      alt={`Avatar for ${userDetail.name}`}
+                      style={{ width: '24px', height: '24px', marginRight: '8px' }}
+                    />
+                    {userDetail.name || accountId}
+                  </div>
+                </td>
+                <td>{maxHours} hours</td>
+                <td>{logWork}</td>
+                <td>
+                  <div style={{ width: '100px', height: '20px', border: '1px solid #ccc' }}>
+                    <svg width="100%" height="100%">
+                      <g className="bars">
+                        <rect fill="#ff0000" width="100%" height="100%"></rect>
+                        <rect fill="#00ff00" width={`${logWorkPercentage}%`} height="100%"></rect>
+                      </g>
+                    </svg>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+
+          <tr>
+  	   <td><b>Total:</b></td>
+           <td><b>{calculateTotalTimeSpent(worklogs).toFixed(2)} hours</b></td>
+           <td><b>{calculateTotalLogWork(worklogs)}</b></td>
+           <td>
+               <a
+        onClick={() => openInNewTabWithQuery(Query)}
+      >
+        Open Jira Search
+      </a>
+            </td>
+         </tr>
+        </tbody>
+      </table>
+    )}
+  </div>
+);
 }
 export default View;
+
 
 
